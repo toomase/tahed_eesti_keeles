@@ -1,0 +1,111 @@
+---
+title: "Lae Eesti keele kõnekorpus
+output: html_notebook
+---
+
+Võta aluseks Eesti keele [ilukirjanduse korpus](http://www.cl.ut.ee/korpused/segakorpus/eesti_ilukirjandus_1990/) ja leia sealt random 1M sõnast tähtede asukohad sõnas:
+
+  * aluseks on see postitus: http://www.prooffreader.com/2014/05/graphing-distribution-of-english.html?m=1
+  * Eesti keele korpus: http://www.cl.ut.ee/korpused/segakorpus/
+
+```{r}
+library(tidyverse)
+library(tei2r)
+library(tidytext)
+library(stringr)
+library(splitstackshape)
+library(janitor)
+library(feather)
+
+# kuva numbrid komakohtadega
+options(scipen = 99)
+```
+
+Funktsioon korpuse xml failide laadimiseks
+```{r}
+lae_tei <- function(x){
+  korpus <- parseTEI(x, "s")
+  
+  korpus_df <- data_frame(rida = korpus)
+}
+```
+
+Lae korpused failidest ühte data_frame kokku
+```{r}
+# failide nimekiri laadimiseks
+korpus_files = list.files("data/Eesti_ilukirjandus/ilukirjandus/Eesti_ilukirjandus_1990/", full.names = TRUE)
+```
+
+Lae kogu ilukirjanduse korpus ühte data frame:
+[http://www.cl.ut.ee/korpused/segakorpus/eesti_ilukirjandus_1990/](http://www.cl.ut.ee/korpused/segakorpus/eesti_ilukirjandus_1990/)
+```{r}
+kokku_korpus <- map_df(korpus_files, lae_tei)
+
+```
+
+Töötle korpust nii, et iga sõna on eraldi real
+```{r}
+korpus_sonad <- kokku_korpus %>% 
+  unnest_tokens(word, rida)
+```
+
+Eesti tähestik
+```{r}
+eesti_tahestik <- c("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", 
+                    "m", "n", "o", "p", "q", "r", "s", "š", "z", "ž", "t", "u", 
+                    "v", "w", "õ", "ä", "ö", "ü", "x", "y")
+```
+
+Töötle korpust nii, et iga täht on eraldi real
+Võta arvesse random 1M sõna
+Ainult eesti tähestiku tähed ja neid sisaldavad sõnad
+```{r}
+set.seed(10)
+
+korpus_tahad <- korpus_sonad %>% 
+  mutate(id = row_number()) %>% 
+  sample_n(250000) %>% 
+  unnest_tokens(taht, word, token = "characters", drop = FALSE) %>% 
+  mutate(mitte_eesti_tahestik = ifelse(!taht %in% eesti_tahestik, 1, 0)) %>% 
+  # jäta alles ainult Eesti tähestiku tähed
+  group_by(word) %>% 
+  mutate(mitte_eesti_sona = sum(mitte_eesti_tahestik)) %>% 
+  filter(mitte_eesti_sona == 0) %>% 
+  select(-mitte_eesti_tahestik, -mitte_eesti_sona)
+```
+
+
+
+Töötle tabelit nii, et igal tähele on juurde lisatud tema asukoht sõnas.
+Kõigis sõnades on tähe asukoht leitud vahemikust 1-15 täht.
+```{r}
+tahe_asukoht_sonad <- korpus_tahad %>% 
+  mutate(sona_pikkus = str_length(word)) %>% 
+  group_by(id) %>% 
+  # jaga iga sõna 15-ks tähe kohaks ja leia vastavalt igale tähele asukoht
+  mutate(mitmes_taht = row_number(),
+         tahe_kaal = 15 / sona_pikkus,
+         tahe_lopp = round(cumsum(tahe_kaal)),
+         tahe_algus = lag(tahe_lopp, 1, default = 0) + 1,
+         tahe_kaal_2 = tahe_lopp - lag(tahe_lopp, 1, default = 0)) %>% 
+  ungroup() %>% 
+  # dubleeri iga rida nii mitu korda kui mitu korda see täht sõnas esineb 
+  # iga sõna kohta on tabelis 15 rida
+  expandRows("tahe_kaal_2") %>% 
+  group_by(id) %>% 
+  mutate(tahe_asukoht = row_number()) %>% 
+  ungroup() %>% 
+  select(taht, tahe_asukoht)
+```
+
+Iga tahe esinemissagedus
+```{r}
+tahe_esinemissagedus <- korpus_tahad %>% 
+  tabyl(taht, sort = TRUE)
+```
+
+
+Salvesta töödeldud tabel visualiseerimiseks
+```{r}
+save(tahe_asukoht_sonad, tahe_esinemissagedus, file = "data/tahe_asukoht_sonad.RData")
+```

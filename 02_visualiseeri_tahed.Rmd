@@ -1,0 +1,67 @@
+---
+title: "Tähteda asukoht sõnas"
+output: html_notebook
+---
+
+Visualiseeri seda, kuidas on jaotunud tähtede asukoht Eesti sõnades.
+
+```{r}
+library(tidyverse)
+library(ggjoy)
+library(forcats)
+library(hrbrthemes)
+library(viridis)
+library(stringr)
+library(scales)
+
+# kuva numbrid komakohtadega
+options(scipen = 99)
+
+load("data/tahe_asukoht_sonad.RData")
+```
+
+Eesti tähestik
+```{r}
+eesti_tahestik <- c("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", 
+                    "m", "n", "o", "p", "q", "r", "s", "š", "z", "ž", "t", "u", 
+                    "v", "w", "õ", "ä", "ö", "ü", "x", "y")
+```
+
+
+```{r, fig.height = 12, fig.width=6}
+tahe_asukoht_sonad %>% 
+  left_join(tahe_esinemissagedus) %>% 
+  mutate(taht = fct_rev(factor(str_to_upper(taht), 
+                               level = str_to_upper(eesti_tahestik)))) %>%
+  ggplot(aes(tahe_asukoht, taht, fill = percent)) +
+  geom_joy(aes(fill = percent), scale = 2, colour = "white", size = 0.7, alpha = 0.8) +
+  scale_fill_viridis(labels = percent) +
+  theme_ipsum_rc() +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(limits = c(1, 15), expand = c(0.01, 0.01)) +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "bottom") +
+  guides(fill = guide_legend(title.position = "top", title.hjust = 0.5)) +
+  labs(fill = "tähe esinemissagedus",
+       title = "Tähteda jaotus eestikeelsete sõnade \nalguses, keskel ja lõpus",
+       caption = "algallikas: Eesti ilukirjanduse korpus\nwww.cl.ut.ee/korpused/segakorpus/eesti_ilukirjandus_1990/") +
+  annotate("text", x = 1, y = 33.5,
+           label="sõna algus", 
+           size = 3.5, hjust = 0, vjust = 1) +
+  annotate("segment", x = 2, xend = 1.2, y = 33, yend = 32.3, 
+           colour = "gray", size = 0.5, arrow = arrow(length = unit(0.2, "cm"))) +
+  annotate("text", x = 6.3, y = 33.5,
+           label = "sõna keskpaik", 
+           size = 3.5, hjust = 0, vjust = 1) +
+  annotate("segment", x = 7.5, xend = 7.5, y = 33, yend = 32.3, 
+           colour = "gray", size = 0.5, arrow = arrow(length = unit(0.2, "cm"))) +
+  annotate("text", x = 13.5, y = 33.5,
+           label = "sõna lõpp", 
+           size = 3.5, hjust = 0, vjust = 1) +
+  annotate("segment", x = 14.3, xend = 14.8, y = 33, yend = 32.7, 
+           colour = "gray", size = 0.5, arrow = arrow(length = unit(0.2, "cm")))
+  
+```
+
